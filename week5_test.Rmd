@@ -2,29 +2,158 @@
 title: "week5_test"
 author: "MRL"
 date: "2021/6/8"
-output: html_document
+output:
+  html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r libraries,echo=FALSE,eval=TRUE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(moderndive)
+library(skimr)
+library(kableExtra)
+library(gridExtra)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r data, echo = FALSE, eval = TRUE, warning = FALSE, message = FALSE}
+cats <- read_csv("cats.csv")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+# Introduction {#sec:Intro}
+Experiments were conducted as part of reseach into “Digitalis”, a heart medicine similar to toxins found in plants commonly known as foxglove. 144 domestic male and female adult cats were used in the experiments and they each had their heart weight in grams (Hwt) measured. This data, including the sex (Sex) of each cat, is analysed in this report.
+
+In particular, this report presents numerical and graphical summaries of the heart weights of the cats andfits a linear model to estimate the difference, on average, between the heart weights of male and female cats.
+
+
+# Exploratory Data Analysis {#sec:EDA}
+Summary statistics of the heart weights of the cats are presented in the following table for each sex separately.
+
+```{r summaries}
+cats %>%
+group_by(Sex) %>%
+summarise(n=n(),Mean=round(mean(Hwt),digits=1), St.Dev=round(sd(Hwt),digits=1),
+Min=min(Hwt), Q1 = quantile(Hwt,0.25), Median=median(Hwt),
+Q3 = quantile(Hwt,0.75), Max=max(Hwt)) %>%
+kable(caption = '\\label{tab:summaries} Summary statistics on
+heart weight by sex of 144 adult cats.') %>%
+kable_styling(latex_options = "hold_position")
+```
+
+This table shows that there were approximately twice as many male cats in the sample (97 compared to 47) and that the summaries of the heart weights of the male cats were consistently greater than the corresponding summaries of the heart weights of female cats. For example the mean heart weight of the male cats was 11.3 grams comared to 9.2 grams for the mean heart weight of cats. We also note that the variability in the male hearts’ weights, as measured by the standard deviation of 2.5 grams, was nearly twice as much as the
+standard deviation of 1.4 grams for the female hearts’ weights. These differences can be easily seen in the following boxplots which summarise the distributions of the heart weights of male and female cats.
+
+```{r boxplot, out.width = '68%', fig.align = "center",fig.cap = "\\label{fig:box} Heart weight by Sex.", fig.pos = 'H'}
+ggplot(cats, aes(x = Sex, y = Hwt)) +
+geom_boxplot() +
+labs(x = "Sex", y = "Heart weight (grams)",
+title = "Heart weights of 144 adult cats")
+```
+
+The boxplot shows that the male cats having heavier hearts, in general, compared to the female cats’ hearts and that the weights of the male hearts were more widely distributed. There are also potentially two outliers (one male and one female) which have unusually heavy hearts, as shown by the two points shown beyond the “whiskers” of the boxplots.
+
+# Formal Data Analysis {#sec:FDA}
+To begin to analyse the cat heart weights data formally, we fit the following linear model to the data.
+
+$$\widehat{\mbox{Hwt}} = \widehat{\alpha} +
+\widehat{\beta}_{\mbox{Male}} \cdot \mathbb{I}_{\mbox{Male}}(x) $$
+
+where
+
+• the intercept $\widehat{\alpha}$ is the mean heart weight for the baseline category of females;
+
+• $\widehat{\beta}_{\mbox{Male}}$ is the difference in the mean heart weight of a Males
+relative to the baseline category Females; 
+and
+
+• $\mathbb{I}_{\mbox{Male}}(i)$ is an indicator function such that
+
+$$\mathbb{I}_{\mbox{Male}}(i)=\left\{
+\begin{array}{ll}
+1 ~~~ \mbox{if Sex of} ~ x \mbox{th observation is Male},\\
+0 ~~~ \mbox{Otherwise}.\\
+\end{array}
+\right.$$
+
+When this model is fitted to the data, the following estimates of ${\alpha}$ (intercept) and ${\beta}_{\mbox{Male}}$ (SexM) are returned:
+
+```{r table,echo=FALSE, eval=TRUE, warning=FALSE,message=FALSE}
+model <- lm(Hwt ~ Sex, data = cats)
+get_regression_table(model) %>%
+dplyr::select(term,estimate) %>% #Note that it seems necessary to include dplyr:: here!!
+kable(caption = '\\label{tab:reg} Estimates of the parameters from the fitted linear
+regression model.') %>%
+kable_styling(latex_options = 'HOLD_position')
+```
+
+Hence the model estimates the average heart weight of female cats is 9.202 grams (which agrees with the sample mean reported in Table 1) and that the male cats’ heart weights are, on average, 2.121 grams heavier than the female cats’ heart weights.
+
+Before we can proceed to use the fitted model (for example to perform statistical inference) we must check the assumptions of the model. These are best considered in light of the residual plots in Figure 2.
+
+```{r residplots, echo=FALSE, fig.width = 13, fig.align = "center",fig.cap = "\\label{fig:resids} Scatterplots of the residuals by Sex (left) and a histogram of the residuals (right).", fig.pos = 'H', message = FALSE}
+regression.points <- get_regression_points(model)
+p1 <- ggplot(regression.points, aes(x = Sex, y = residual)) +
+geom_jitter(width = 0.1) +
+labs(x = "Sex", y = "Residual") +
+geom_hline(yintercept = 0, col = "blue")
+p2 <- ggplot(regression.points, aes(x = residual)) +
+geom_histogram(color = "white") +
+labs(x = "Residual")
+grid.arrange(p1, p2, ncol = 2)
+```
+
+The scatterplots show an approximately even spread of the residuals above and below the zero line for each gender, and hence the assumption that the residuals have mean zero appears valid. The assumption of constant variance within the two genders is not supported, however, as the spread of the residuals in the vertical scatter of the male cats is considerably more than that of the females (as was noted above when the standard deviations were considered). The histogram supports the assumption of normally distributed errors in the model, with the exception of a potential outlier.
+
+# Conclusions {#sec:Conc}
+
+In summary, we have estimated that, on average, the male cats have hearts which weigh 2.121 grams more than the female cats’ hearts. In particular, we estimate the average heart weight of female cats is 9.202 grams and the average heart weight of male cats is 11.3 grams.
+
+In addition to the centers of the distibutions of male and female cats’ heart weights being different, we have also observed that the spread of the male heart weights is greater than the spread of the female cats’ heart weights. This may pose a problem if the standard linear model was used to further analyse this data, and therefore it is recommended that model which allow for differences in the variances within different groups be used.
+
+
+\newpage
+# FURTHER TASK {#sec:FT}
+
+## Futher Task Part a {#sec:sub}
+
+```{r newdata, echo = FALSE, eval = TRUE, warning = FALSE, message = FALSE}
+Glasgow_Ed_SIMD2020 <- read_csv("Glasgow_Edinburgh_SIMD2020.csv")
+```
+
+To convert the data into a tidy format, use:
+
+```{r tidy1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+Glasgow_Ed_SIMD2020_tidy1 <- gather(data = Glasgow_Ed_SIMD2020,
+                                    key = Type_of_Rank,
+                                    value = Rank,
+                                    SIMD_Rank:Housing_Rank)
+Glasgow_Ed_SIMD2020_tidy1$Type_of_Rank <-str_replace(Glasgow_Ed_SIMD2020_tidy1$Type_of_Rank,
+                                                     "_Rank", "")
+```
+
+or
+
+```{r tidy2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+Glasgow_Ed_SIMD2020_tidy2 <- gather(data = Glasgow_Ed_SIMD2020,
+                                    key = Type_of_Rank,
+                                    value = Rank,
+                                    -(Data_Zone:Working_Age_population))
+Glasgow_Ed_SIMD2020_tidy2$Type_of_Rank <-str_replace(Glasgow_Ed_SIMD2020_tidy2$Type_of_Rank,
+                                                     "_Rank", "")
+```
+
+## Futher Task Part b {#sec:sub}
+
+```{r mutate, echo=FALSE, eval=TRUE, warning=FALSE, message=FALSE}
+Gla_Ed_SIMD2020 <- Glasgow_Ed_SIMD2020_tidy2 %>%
+filter(Type_of_Rank == "SIMD") %>% 
+mutate(Perc_Working = 100 * Working_Age_population/Total_population)
+```
+
+```{r scatplot, echo=FALSE, eval=TRUE, out.width="70%",fig.align = "center", fig.pos ="h", warning = FALSE, fig.cap = "\\label{fig:scat}  SIMD Rank against Percentage of working age population working for Glasgow and Edinburgh Data Zones"}
+ggplot(Gla_Ed_SIMD2020)+
+  geom_point(mapping=aes(x=Perc_Working,y=Rank,group=Council_area,color=Council_area))+
+  labs(x="Employment Rate of Working Age Population",y="SIMD2020 Rank")
+```
